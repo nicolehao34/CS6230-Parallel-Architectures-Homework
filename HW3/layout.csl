@@ -36,7 +36,7 @@ const memcpy = @import_module("<memcpy/get_params>", .{
 });
 
 layout {
-  @set_rectangle(Px, Py);
+  @set_rectangle(Px, Py); // Make sure this is here
 
   var x: u16 = 0;
   while (x < Px) : (x += 1) {
@@ -46,32 +46,37 @@ layout {
       const odd_x = x % 2 == 1;
       const odd_y = y % 2 == 1;
 
-      // HW1.0: Assign colors for PEs
-      // Use the constants: x_* and y_*
-      // Hint: C-Style ternary operator is "if (expr) val else val2"
+      // HW1.0 logic (example)
+      const color_x = if (x % 4 == 0) x_a else if (x % 4 == 1) x_b else if (x % 4 == 2) x_c else x_d;
+      const color_y = if (y % 4 == 0) y_a else if (y % 4 == 1) y_b else if (y % 4 == 2) y_c else y_d;
+      const even = (x + y) % 2 == 0;
+
       @set_tile_code(x, y, "pe_program.csl", .{
         .memcpy_params = memcpy_params,
         .dx = dx,
         .dy = dy,
         .odd_x = odd_x,
         .odd_y = odd_y,
-        .north_rx = ,
-        .south_tx = ,
-        .south_rx = ,
-        .north_tx = ,
-        .east_rx  = ,
-        .east_tx  = ,
-        .west_rx  = ,
-        .west_tx  = ,
+
+        .north_rx = if (even) color_y else null,
+        .south_tx = if (even) color_y else null,
+        .south_rx = if (!even) color_y else null,
+        .north_tx = if (!even) color_y else null,
+
+        .east_rx  = if (even) color_x else null,
+        .west_tx  = if (even) color_x else null,
+        .west_rx  = if (!even) color_x else null,
+        .east_tx  = if (!even) color_x else null,
+
         .border_north = y == 0,
         .border_east  = x == Px - 1,
         .border_south = y == Py - 1,
         .border_west  = x == 0,
-       });
+      });
     }
   }
 
-  // export symbol name
+  // exports
   @export_name("data", [*]u32, true);
   @export_name("tsc_t0", [*]u16, true);
   @export_name("tsc_t1", [*]u16, true);
