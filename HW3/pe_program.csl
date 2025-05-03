@@ -1,4 +1,6 @@
 // Parameters
+// Define various parameters for the program, including memory copy parameters,
+// border flags, fabric colors for communication, and grid dimensions.
 param memcpy_params: comptime_struct;
 param odd_x: bool;
 param odd_y: bool;
@@ -17,16 +19,18 @@ param border_east:  bool;
 param border_south: bool;
 param border_west:  bool;
 
-// dx and dy are in {x ∈ N | x mod 2 == 0 ∧ x ≤ 4}
+// dx and dy are grid dimensions, constrained to even numbers ≤ 4.
 param dx: u32;
 param dy: u32;
 
 // Imports
+// Import modules for memory copy, timestamping, and simulation printing.
 const sys_mod = @import_module("<memcpy/memcpy>", memcpy_params);
 const timestamp = @import_module("<time>");
 const prt = @import_module("<simprint>");
 
 // Queue IDs
+// Define input and output queue IDs for communication in each direction.
 const north_oq = @get_output_queue(2);
 const north_iq = @get_input_queue(2);
 const east_oq  = @get_output_queue(3);
@@ -37,6 +41,7 @@ const west_oq  = @get_output_queue(5);
 const west_iq  = @get_input_queue(5);
 
 // Globals
+// Define global variables for timestamp buffers and the data grid.
 var tscEndBuffer = @zeros([timestamp.tsc_size_words]u16);
 var tscStartBuffer = @zeros([timestamp.tsc_size_words]u16);
 var ptr_tsc_end: [*]u16 = &tscEndBuffer;
@@ -45,9 +50,12 @@ var ptr_tsc_start: [*]u16 = &tscStartBuffer;
 var data = @zeros([dy, dx]u32);
 var ptr_data: [*]u32 = &data;
 
+// Determine if the tile is "odd" based on its coordinates.
 const odd_tile = odd_x != odd_y;
 
 // DSRs
+// Define data stream descriptors (DSRs) for transmitting and receiving data
+// in each direction.
 const dsd_north_tx = @get_dsd(fabout_dsd, .{ .extent = 1, .fabric_color = north_tx, .output_queue = north_oq });
 const dsd_east_tx  = @get_dsd(fabout_dsd, .{ .extent = 1, .fabric_color = east_tx,  .output_queue = east_oq });
 const dsd_south_tx = @get_dsd(fabout_dsd, .{ .extent = 1, .fabric_color = south_tx, .output_queue = south_oq });
@@ -59,10 +67,12 @@ const dsd_south_rx = @get_dsd(fabin_dsd, .{ .extent = 1, .fabric_color = south_r
 const dsd_west_rx  = @get_dsd(fabin_dsd, .{ .extent = 1, .fabric_color = west_rx,  .input_queue = west_iq });
 
 // Task IDs
+// Define task IDs for column and row sorting tasks.
 const col_sort_task_id: local_task_id = @get_local_task_id(8);
 const row_sort_task_id: local_task_id = @get_local_task_id(9);
 
 // Swap helper
+// Inline function to swap two elements in the data grid based on sorting order.
 inline fn swap(col1: u16, row1: u16, col2: u16, row2: u16, comptime asc: bool) void {
   var a = data[row1, col1];
   var b = data[row2, col2];
@@ -80,6 +90,7 @@ inline fn swap(col1: u16, row1: u16, col2: u16, row2: u16, comptime asc: bool) v
 }
 
 // HW2.1 Row Sort
+// Task to sort rows of the grid in alternating ascending and descending order.
 task row_sort() void {
   for (@range(u16, 0, dy, 1)) |r| {
     const asc = r % 2 == 0;
@@ -123,6 +134,7 @@ task row_sort() void {
 }
 
 // HW2.0 Column Sort + HW2.1 Activate Row Sort
+// Task to sort columns of the grid in ascending order and activate row sorting.
 task col_sort() void {
   for (@range(u16, 0, dx, 1)) |c| {
     for (@range(u16, 0, dy - 1, 2)) |r| {
@@ -151,12 +163,14 @@ task col_sort() void {
 }
 
 // Task Bindings
+// Bind the column and row sorting tasks to their respective task IDs.
 comptime {
   @bind_local_task(col_sort, col_sort_task_id);
   @bind_local_task(row_sort, row_sort_task_id);
 }
 
 // Initialization
+// Function to initialize the system, set tile color, and unblock the command stream.
 fn f_init() void {
   timestamp.enable_tsc();
 
@@ -172,18 +186,21 @@ fn f_init() void {
 }
 
 // Start Sorting
+// Function to start the sorting process by activating the column sort task.
 fn f_step() void {
   timestamp.get_timestamp(&tscStartBuffer);
   @activate(col_sort_task_id);
 }
 
 // Finish
+// Function to finalize the sorting process and unblock the command stream.
 fn f_sync() void {
   timestamp.get_timestamp(&tscEndBuffer);
   sys_mod.unblock_cmd_stream();
 }
 
 // Routes
+// Initialize communication queues and configure local color routes.
 comptime {
   @initialize_queue(north_oq, .{ .color = north_tx });
   @initialize_queue(north_iq, .{ .color = north_rx });
@@ -199,6 +216,7 @@ comptime {
 }
 
 // Exports
+// Export symbols for data, timestamps, and initialization/synchronization functions.
 comptime {
   @export_symbol(ptr_data, "data");
   @export_symbol(ptr_tsc_start, "tsc_t0");
